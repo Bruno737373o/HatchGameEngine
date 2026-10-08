@@ -77,7 +77,6 @@ jobs:
         path: build/${{ matrix.build_type }}/HatchGameEngine-${{ matrix.build_type }}.exe
         retention-days: 7
 
-  # Duplicated from above, no simple way to add Switch to the matrix
   switch-build:
     runs-on: ubuntu-22.04
     container: devkitpro/devkita64:latest
@@ -90,7 +89,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # github.workspace doesn't work on container workflows so we use $GITHUB_WORKSPACE instead
       - name: Set reusable strings
         id: strings
         shell: bash
@@ -113,3 +111,42 @@ jobs:
           name: HatchGameEngine-Switch-${{ matrix.build_type }}-${{ github.sha }}
           path: build/*.nro
           retention-days: 7
+
+  android-build:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+
+      matrix:
+        build_type: [Release, Debug]
+        abi: [arm64-v8a, armeabi-v7a]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set reusable strings
+        id: strings
+        shell: bash
+        run: |
+          echo "build-output-dir=${GITHUB_WORKSPACE}/build" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake for Android
+        run: >
+          cmake -B ${{ steps.strings.outputs.build-output-dir }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake
+          -DANDROID_ABI=${{ matrix.abi }}
+          -DANDROID_PLATFORM=android-21
+          -DANDROID_STL=c++_shared
+          -S ${GITHUB_WORKSPACE}
+
+      - name: Build
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --parallel 4
+
+      - name: Upload Android build
+        uses: actions/upload-artifact@v4
+        with:
+          name: HatchGameEngine-Android-${{ matrix.abi }}-${{ matrix.build_type }}-${{ github.sha }}
+          path: build/*.so
+          retention-days: 7
+          
